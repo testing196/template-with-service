@@ -11,7 +11,7 @@ import { getUserBookings } from "@/lib/utils/booking-utils"
 import { mockServices } from "@/lib/data/mock-data"
 import { isBefore } from "date-fns"
 import type { Booking, Service } from "@/lib/types"
-import { BOOKING_CONFIG } from "@/lib/config/booking-config" // Declare BOOKING_CONFIG
+import { BOOKING_CONFIG } from "@/lib/constants" // Declare BOOKING_CONFIG
 
 // Mock current user - TODO: Replace with actual auth
 const CURRENT_USER_ID = "guest"

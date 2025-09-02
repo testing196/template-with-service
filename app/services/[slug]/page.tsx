@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import { notFound } from "next/navigation"
 import Link from "next/link"
+import Script from "next/script"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -11,12 +12,24 @@ import { AvailabilityCalendar } from "@/components/availability-calendar"
 import { TimeSlotPicker } from "@/components/time-slot-picker"
 import { mockServices, mockAvailabilityRules, mockBlackouts } from "@/lib/data/mock-data"
 import { generateAvailableSlots } from "@/lib/utils/slot-generator"
+import { createBooking, processPayment } from "@/lib/utils/booking-utils"
+import { BOOKING_CONFIG } from "@/lib/constants"
 import { addDays, startOfDay } from "date-fns"
 import type { TimeSlot } from "@/lib/types"
 
 interface ServiceDetailPageProps {
-  params: {
+  params: Promise<{
     slug: string
+  }>
+}
+
+// PayPal client ID from environment variables
+const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'ASi7F7Ra8viTD0qeNWNNx_hfvmCRWWmi04gpl8tFUg36HwPuGbSBLGTE-4E3-R1N1F5L_g2JD9Hvga7d';
+
+// Add TypeScript interface for PayPal window
+declare global {
+  interface Window {
+    paypal: any;
   }
 }
 
@@ -25,9 +38,15 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot>()
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([])
   const [availableDates, setAvailableDates] = useState<Date[]>([])
+  const [bookingInProgress, setBookingInProgress] = useState(false)
+  const [bookingError, setBookingError] = useState<string>('')
+  const [bookingId, setBookingId] = useState<string | null>(null)
+  const [customerName] = useState('Guest User')
+  const [customerEmail] = useState('guest@example.com')
 
-  // Find the service
-  const service = mockServices.find((s) => s.slug === params.slug)
+  // Unwrap params and find the service
+  const unwrappedParams = use(params)
+  const service = mockServices.find((s) => s.slug === unwrappedParams.slug)
 
   if (!service) {
     notFound()
@@ -97,7 +116,112 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
     }
   }
 
+  // Function to handle PayPal Book Now flow
+  const handleBookNow = async () => {
+    if (!service || !selectedSlot || !selectedDate) {
+      setBookingError('Please select a date and time');
+      return;
+    }
+    
+    setBookingInProgress(true);
+    setBookingError('');
+    
+    try {
+      // Create a booking with minimal info (guest user)
+      const booking = createBooking({
+        serviceId: service.id,
+        startTime: selectedSlot.startTime,
+        customerName: customerName,
+        customerEmail: customerEmail,
+        timezone: BOOKING_CONFIG.defaultTimezone,
+      });
+      
+      setBookingId(booking.id);
+      
+      // Initialize PayPal buttons after booking is created
+      setTimeout(() => {
+        initPayPalButtons(booking.id, service);
+      }, 100);
+      
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      setBookingError('Could not create booking. Please try again or use full checkout.');
+    } finally {
+      setBookingInProgress(false);
+    }
+  };
+  
+  // Initialize PayPal buttons
+  const initPayPalButtons = (bookingId: string, service: any) => {
+    if (!window.paypal) {
+      setBookingError('Payment system not available. Please try again or use full checkout.');
+      return;
+    }
+    
+    const paypalButtonsContainer = document.getElementById('paypal-button-container');
+    if (!paypalButtonsContainer) return;
+    
+    // Clear the container first
+    paypalButtonsContainer.innerHTML = '';
+    
+    window.paypal.Buttons({
+      style: {
+        layout: 'vertical',
+        color: 'blue',
+        shape: 'rect',
+        label: 'pay'
+      },
+      
+      // Create order on the server
+      createOrder: async () => {
+        try {
+          setBookingInProgress(true);
+          setBookingError('');
+          
+          // Process payment with PayPal
+          const paymentResult = await processPayment({
+            amount: service.price,
+            customerEmail: customerEmail,
+            customerName: customerName,
+            bookingId: bookingId,
+          });
+          
+          if (paymentResult.success && paymentResult.paypalOrderId) {
+            return paymentResult.paypalOrderId;
+          } else {
+            setBookingError(paymentResult.error || "Could not create PayPal order");
+            throw new Error(paymentResult.error || "Payment initialization failed");
+          }
+        } catch (err) {
+          console.error("PayPal order creation error:", err);
+          setBookingError("Failed to create PayPal order. Please try again.");
+          throw err;
+        } finally {
+          setBookingInProgress(false);
+        }
+      },
+      
+      // Handle approval on the client
+      onApprove: (data: any) => {
+        // Redirect to success page with the order ID
+        window.location.href = `/checkout/success?booking=${bookingId}&token=${data.orderID}`;
+      },
+      
+      // Handle errors
+      onError: (err: any) => {
+        console.error("PayPal error:", err);
+        setBookingError("There was an error processing your payment. Please try again.");
+      }
+    }).render('#paypal-button-container');
+  };
+
   return (
+    <>
+      {/* PayPal SDK Script */}
+      <Script
+        src={`https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&currency=USD`}
+        strategy="afterInteractive"
+      />
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
@@ -262,7 +386,7 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
                         <span className="text-muted-foreground">Service:</span> {service.name}
                       </p>
                       <p>
-                        <span className="text-muted-foreground">Date:</span> {selectedDate.toLocaleDateString()}
+                        <span className="text-muted-foreground">Date:</span> {selectedDate?.toLocaleDateString()}
                       </p>
                       <p>
                         <span className="text-muted-foreground">Time:</span>{" "}
@@ -276,13 +400,38 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
                       </p>
                     </div>
                   </div>
-                  <Button asChild className="w-full" size="lg">
-                    <Link
-                      href={`/checkout?service=${service.id}&date=${selectedDate.toISOString()}&time=${selectedSlot.startTime.toISOString()}`}
+                  <div className="space-y-4">
+                    {/* Book Now with PayPal */}
+                    <Button 
+                      className="w-full" 
+                      size="lg" 
+                      onClick={() => handleBookNow()}
+                      disabled={bookingInProgress}
                     >
-                      Continue to Checkout
-                    </Link>
-                  </Button>
+                      {bookingInProgress ? 'Processing...' : 'Book Now with PayPal'}
+                    </Button>
+                    
+                    {/* PayPal button container */}
+                    {bookingId && (
+                      <div id="paypal-button-container" className="min-h-[150px]"></div>
+                    )}
+                    
+                    {/* Error message */}
+                    {bookingError && (
+                      <div className="text-destructive text-sm p-2 bg-destructive/10 rounded-md">{bookingError}</div>
+                    )}
+                    
+                    {/* Continue to full checkout option */}
+                    <div className="text-center mt-2">
+                      <span className="text-sm text-muted-foreground">Need to enter more details?</span>
+                      <Link
+                        href={`/checkout?service=${service.id}&date=${selectedDate?.toISOString()}&time=${selectedSlot.startTime.toISOString()}`}
+                        className="text-sm text-primary hover:underline ml-1"
+                      >
+                        Go to full checkout
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -290,5 +439,6 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
         </div>
       </div>
     </div>
+    </>
   )
 }
