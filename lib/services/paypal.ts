@@ -4,9 +4,9 @@
  */
 
 // PayPal API Configuration
-const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'ASi7F7Ra8viTD0qeNWNNx_hfvmCRWWmi04gpl8tFUg36HwPuGbSBLGTE-4E3-R1N1F5L_g2JD9Hvga7d';
-const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || 'EGtZnxXVdAGm2WTey2d8RO1wKka1wdId3JbRigSgQmtopTuzM7Vpk9nB2Yc7KtaDtTpf4ejNGFoFzFJx';
-const PAYPAL_API_URL = process.env.NEXT_PUBLIC_PAYPAL_API_URL || 'https://api-m.sandbox.paypal.com';
+const PAYPAL_CLIENT_ID = 'ASi7F7Ra8viTD0qeNWNNx_hfvmCRWWmi04gpl8tFUg36HwPuGbSBLGTE-4E3-R1N1F5L_g2JD9Hvga7d';
+const PAYPAL_CLIENT_SECRET = 'EGtZnxXVdAGm2WTey2d8RO1wKka1wdId3JbRigSgQmtopTuzM7Vpk9nB2Yc7KtaDtTpf4ejNGFoFzFJx';
+const PAYPAL_API_URL = 'https://api-m.sandbox.paypal.com';
 
 // Types for PayPal API
 export interface PayPalOrderDetails {

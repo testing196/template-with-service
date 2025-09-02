@@ -14,7 +14,7 @@ import { BOOKING_CONFIG } from "@/lib/constants"
 import type { Service } from "@/lib/types"
 
 // PayPal client ID from environment variables
-const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'ASi7F7Ra8viTD0qeNWNNx_hfvmCRWWmi04gpl8tFUg36HwPuGbSBLGTE-4E3-R1N1F5L_g2JD9Hvga7d';
+const PAYPAL_CLIENT_ID = 'ASi7F7Ra8viTD0qeNWNNx_hfvmCRWWmi04gpl8tFUg36HwPuGbSBLGTE-4E3-R1N1F5L_g2JD9Hvga7d';
 
 function CheckoutContent() {
   const searchParams = useSearchParams()
